@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 
 app = FastAPI()
+
 model = joblib.load("greenmind_model.joblib")
 
 class Telemetry(BaseModel):
@@ -13,8 +14,7 @@ class Telemetry(BaseModel):
 @app.post("/predict")
 async def predict(data: Telemetry):
     features = [[data.temperature, data.humidity, data.soilMoisture]]
-    prediction = model.predict(features)[0]
+    prediction = model.predict(features)[0]  # should return [1, 0] or [0, 1]
     fan = "on" if prediction[0] == 1 else "off"
     pump = "on" if prediction[1] == 1 else "off"
     return {"fanStatus": fan, "pumpStatus": pump}
-
