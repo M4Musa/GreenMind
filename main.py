@@ -9,6 +9,7 @@ try:
     print("✅ Model loaded successfully.")
 except Exception as e:
     print("❌ Error loading model:", e)
+    model = None
 
 class Telemetry(BaseModel):
     temperature: float
@@ -18,6 +19,9 @@ class Telemetry(BaseModel):
 @app.post("/predict")
 async def predict(data: Telemetry):
     try:
+        if model is None:
+            return {"error": "Model not loaded"}
+
         print("📥 Received data:", data)
         features = [[data.temperature, data.humidity, data.soilMoisture]]
         print("📊 Features:", features)
