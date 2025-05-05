@@ -1,23 +1,15 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# Allow all origins for testing (you can tighten later)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-app = FastAPI()
-
-model = joblib.load("greenmind_model.joblib")
-
+try:
+    model = joblib.load("greenmind_model.joblib")
+    print("✅ Model loaded successfully.")
+except Exception as e:
+    print("❌ Error loading model:", e)
+    model = None
 
 class Telemetry(BaseModel):
     temperature: float
@@ -26,17 +18,18 @@ class Telemetry(BaseModel):
 
 @app.post("/predict")
 async def predict(data: Telemetry):
-    features = [[data.temperature, data.humidity, data.soilMoisture]]
-    prediction = model.predict(features)[0]
+    try:
+        if model is None:
+            return {"error": "Model not loaded"}
 
-    # SAFELY interpret prediction output
-    if isinstance(prediction, str):
-        fan = "on" if "fan_on" in prediction else "off"
-        pump = "on" if "pump_on" in prediction else "off"
-    elif isinstance(prediction, (list, tuple)):
+        print("📥 Received data:", data)
+        features = [[data.temperature, data.humidity, data.soilMoisture]]
+        print("📊 Features:", features)
+        prediction = model.predict(features)[0]
+        print("🔮 Prediction:", prediction)
         fan = "on" if prediction[0] == 1 else "off"
         pump = "on" if prediction[1] == 1 else "off"
-    else:
-        fan = pump = "unknown"
-
-    return {"fanStatus": fan, "pumpStatus": pump}
+        return {"fanStatus": fan, "pumpStatus": pump}
+    except Exception as e:
+        print("❌ Prediction error:", e)
+        return {"error": str(e)}
