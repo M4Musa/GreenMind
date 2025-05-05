@@ -3,57 +3,43 @@ from pydantic import BaseModel
 import joblib
 import os
 import logging
+from pathlib import Path
 
-# Set up logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(title="GreenMind API")
 
-# More robust model loading with better error handling
-try:
-    # Try different possible paths for the model
-    model_paths = [
-        "greenmind_model.joblib",
-        "./greenmind_model.joblib",
-        os.path.join(os.path.dirname(__file__), "greenmind_model.joblib")
-    ]
-    
-    model = None
-    for path in model_paths:
-        try:
-            logger.info(f"Attempting to load model from: {path}")
-            if os.path.exists(path):
-                model = joblib.load(path)
-                logger.info(f"✅ Model loaded successfully from {path}")
-                break
-            else:
-                logger.warning(f"Path does not exist: {path}")
-        except Exception as e:
-            logger.error(f"Failed to load from {path}: {str(e)}")
-    
-    if model is None:
-        logger.error("❌ Could not load model from any path")
-except Exception as e:
-    logger.error(f"❌ Error in model loading process: {str(e)}")
-    model = None
+# Get the absolute path to the model file
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "greenmind_model.joblib")
+model = None
 
 class Telemetry(BaseModel):
     temperature: float
     humidity: float
     soilMoisture: float
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {"status": "API is running", "model_loaded": model is not None}
+@app.on_event("startup")
+async def startup_event():
+    global model
+    try:
+        logger.info(f"Attempting to load model from: {MODEL_PATH}")
+        model = joblib.load(MODEL_PATH)
+        logger.info("✅ Model loaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Error loading model: {str(e)}")
+        model = None
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "model_loaded": model is not None}
 
 @app.post("/predict")
 async def predict(data: Telemetry):
     try:
         if model is None:
-            logger.error("Prediction attempted but model is not loaded")
-            raise HTTPException(status_code=500, detail="Model not loaded")
+            raise HTTPException(status_code=503, detail="Model not loaded")
         
         logger.info(f"📥 Received data: {data}")
         features = [[data.temperature, data.humidity, data.soilMoisture]]
