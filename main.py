@@ -4,12 +4,8 @@ import joblib
 
 app = FastAPI()
 
-try:
-    model = joblib.load("greenmind_model.joblib")
-    print("✅ Model loaded successfully.")
-except Exception as e:
-    print("❌ Error loading model:", e)
-    model = None
+# Load model
+model = joblib.load("greenmind_model.joblib")
 
 class Telemetry(BaseModel):
     temperature: float
@@ -18,18 +14,20 @@ class Telemetry(BaseModel):
 
 @app.post("/predict")
 async def predict(data: Telemetry):
-    try:
-        if model is None:
-            return {"error": "Model not loaded"}
+    features = [[data.temperature, data.humidity, data.soilMoisture]]
+    prediction = model.predict(features)[0]
 
-        print("📥 Received data:", data)
-        features = [[data.temperature, data.humidity, data.soilMoisture]]
-        print("📊 Features:", features)
-        prediction = model.predict(features)[0]
-        print("🔮 Prediction:", prediction)
+    # Determine prediction type
+    if isinstance(prediction, str):
+        # Handle single label case (e.g., "fan_on")
+        fan = "on" if "fan_on" in prediction else "off"
+        pump = "on" if "pump_on" in prediction else "off"
+    elif isinstance(prediction, (list, tuple)):
+        # Handle multi-output binary classification (e.g., [1, 0])
         fan = "on" if prediction[0] == 1 else "off"
         pump = "on" if prediction[1] == 1 else "off"
-        return {"fanStatus": fan, "pumpStatus": pump}
-    except Exception as e:
-        print("❌ Prediction error:", e)
-        return {"error": str(e)}
+    else:
+        fan = "unknown"
+        pump = "unknown"
+
+    return {"fanStatus": fan, "pumpStatus": pump}
